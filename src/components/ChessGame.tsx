@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Chess, type Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
-import { Copy, ExternalLink, RotateCcw, RefreshCw } from 'lucide-react';
+import { RotateCcw, RefreshCw, Settings, Copy, ExternalLink, Lightbulb, Maximize2, Minimize2 } from 'lucide-react';
 import type { Opening } from '../data/openings';
 import { StockfishEngine } from '../lib/stockfish';
 import type { Evaluation } from '../lib/stockfish';
@@ -12,13 +13,27 @@ import type { MoveNode } from '../lib/pgnParser';
 
 interface ChessGameProps {
     opening: Opening;
-    difficulty: number; // 0-20
+    difficulty: number;
     mode: 'trainer' | 'explorer' | 'blind';
     showHints: boolean;
     onComplete: (success: boolean, message: string) => void;
+    onOpenSettings: () => void;
+    onToggleHints: () => void;
+    isFullscreen: boolean;
+    onToggleFullscreen: () => void;
 }
 
-export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode, showHints, onComplete }) => {
+export const ChessGame: React.FC<ChessGameProps> = ({
+    opening,
+    difficulty,
+    mode,
+    showHints,
+    onComplete,
+    onOpenSettings,
+    onToggleHints,
+    isFullscreen,
+    onToggleFullscreen
+}) => {
     // Use useRef for the game instance to avoid stale closures in timeouts/callbacks
     const gameRef = useRef(new Chess());
     // We still need state to trigger re-renders when the board updates
@@ -191,8 +206,8 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
             } else if (status === 'playing') {
                 setStatus('won');
                 onComplete(true, mode === 'blind'
-                    ? `Victory! You completed the hidden opening: ${targetOpening.current?.opening.name}`
-                    : `You successfully navigated the ${opening.name}!`
+                    ? `Victory! You completed the hidden opening: ${targetOpening.current?.opening.name} `
+                    : `You successfully navigated the ${opening.name} !`
                 );
             }
         }
@@ -284,14 +299,14 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
             // Switch target!
             const randomIdx = Math.floor(Math.random() * possibleOpenings.current.length);
             targetOpening.current = possibleOpenings.current[randomIdx];
-            setBlindModeMessage(`Switched to ${targetOpening.current.opening.name}`);
+            setBlindModeMessage(`Switched to ${targetOpening.current.opening.name} `);
             setTimeout(() => setBlindModeMessage(null), 3000);
         }
 
         // Check if won (leaf node of target)
         if (targetOpening.current?.currentNode?.children.length === 0) {
             setStatus('won');
-            onComplete(true, `Victory! You completed the hidden opening: ${targetOpening.current.opening.name}`);
+            onComplete(true, `Victory! You completed the hidden opening: ${targetOpening.current.opening.name} `);
         }
     };
 
@@ -333,7 +348,7 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                     if (matchingNode.children.length === 0) {
                         if (mode === 'trainer') {
                             setStatus('won');
-                            onComplete(true, `You successfully navigated the ${opening.name}!`);
+                            onComplete(true, `You successfully navigated the ${opening.name} !`);
                         } else {
                             // Explorer mode: Reached end of book, continue with engine
                             playComputerMove();
@@ -440,16 +455,91 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
         }
     };
 
-    const copyFen = () => {
-        navigator.clipboard.writeText(fen);
-        alert('FEN copied to clipboard!');
+    const copyPgn = () => {
+        navigator.clipboard.writeText(gameRef.current.pgn());
+        // Could add a toast here
+        alert('PGN copied to clipboard!');
     };
 
     const analyzeLichess = () => {
         window.open(`https://lichess.org/analysis/${fen.replace(/ /g, '_')}`, '_blank');
     };
 
+    const undoMove = () => {
+        gameRef.current.undo();
+        // If it was computer's turn (we undid user move), we might want to undo computer move too?
+        // Usually in trainer, we play White. Computer plays Black.
+        // If we undo, we undo our move? Or computer's move?
+        // If it's currently our turn, and we undo, we undo computer's last move. Then we are at computer's turn.
+        // So we should undo twice to get back to our previous position.
+
+        if (gameRef.current.turn() !== opening.playerColor) {
+            gameRef.current.undo();
+        }
+
+        const newFen = gameRef.current.fen();
+        setFen(newFen);
+        setStatus('playing');
+        engine.current?.evaluate(newFen);
+        setBlindModeMessage(null);
+
+        // Re-sync currentNode with game history
+        if (mode !== 'blind') {
+            const history = gameRef.current.history({ verbose: true });
+            let currentLevel = moveTree.current;
+            let node: MoveNode | null = null;
+
+            for (const move of history) {
+                const found = currentLevel.find(n => n.san === move.san);
+                if (found) {
+                    node = found;
+                    currentLevel = found.children;
+                } else {
+                    node = null;
+                    break;
+                }
+            }
+            currentNode.current = node;
+        }
+    };
+
     const [customArrows, setCustomArrows] = useState<{ startSquare: Square; endSquare: Square; color: string }[]>([]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if typing in an input or textarea
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            switch (e.key.toLowerCase()) {
+                case 'arrowleft':
+                    undoMove();
+                    break;
+                case 'r':
+                    resetGame();
+                    break;
+                case 'h':
+                    onToggleHints();
+                    break;
+                case 'f':
+                    onToggleFullscreen();
+                    break;
+                case 'c':
+                    copyPgn();
+                    break;
+                case 'a':
+                    analyzeLichess();
+                    break;
+                case 's':
+                    onOpenSettings();
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undoMove, resetGame, onToggleHints, onToggleFullscreen, copyPgn, analyzeLichess, onOpenSettings]);
 
     useEffect(() => {
         if (showHints && status === 'playing' && gameRef.current.turn() === opening.playerColor) {
@@ -506,12 +596,12 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
     }, [showHints, status, opening, mode, fen]);
 
     return (
-        <div className="flex gap-4 items-stretch justify-center w-full max-w-[700px] mx-auto relative">
+        <div className={`flex gap-4 items-stretch justify-center w-full mx-auto relative ${isFullscreen ? 'h-full' : 'max-w-[700px]'}`}>
 
             <EvaluationBar evaluation={evaluation} orientation={orientation} />
 
-            <div className="flex-1 flex flex-col items-center">
-                <div className="w-full aspect-square relative">
+            <div className="flex-1 flex flex-col items-center justify-center min-h-0 relative">
+                <div className={`relative ${isFullscreen ? 'h-screen w-auto aspect-square' : 'w-full aspect-square'}`}>
                     <Chessboard
                         options={{
                             arrows: customArrows,
@@ -523,13 +613,21 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                             boardOrientation: orientation,
                             darkSquareStyle: { backgroundColor: '#779556' },
                             lightSquareStyle: { backgroundColor: '#ebecd0' },
+                            boardStyle: {
+                                borderRadius: '4px',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            }
                         }}
                     />
+
+                    {/* Promotion Dialog */}
                     <PromotionDialog
                         isOpen={!!pendingPromotion}
                         onSelect={handlePromotionSelect}
                         orientation={orientation}
                     />
+
+                    {/* Blind Mode Message */}
                     {blindModeMessage && (
                         <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
                             <div className="bg-black/75 text-white px-6 py-3 rounded-xl text-xl font-bold animate-in fade-in zoom-in duration-300">
@@ -539,78 +637,75 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                     )}
                 </div>
 
-                <div className="mt-4 w-full flex justify-between items-center text-white bg-gray-800 p-3 rounded-lg">
+                {/* Bottom Control Bar */}
+                <div className={`${isFullscreen
+                    ? 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-6 opacity-0 hover:opacity-100 transition-opacity duration-300 z-20'
+                    : 'w-full bg-gray-800 p-4 rounded-b-lg'} flex items-center justify-between`}>
+
                     <div className="font-mono text-sm truncate max-w-[200px] opacity-50" title={fen}>
                         {status === 'playing'
                             ? (gameRef.current.turn() === 'w' ? 'White to move' : 'Black to move')
                             : status === 'won' ? 'Victory!' : status === 'lost' ? 'Defeat' : 'Out of Book'}
                     </div>
+
                     <div className="flex gap-2">
                         <button
-                            onClick={resetGame}
+                            onClick={undoMove}
                             className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
-                            title="Reset Board"
-                        >
-                            <RefreshCw size={18} />
-                        </button>
-                        <button
-                            onClick={() => {
-                                gameRef.current.undo();
-                                if (gameRef.current.turn() !== opening.playerColor) {
-                                    gameRef.current.undo();
-                                }
-                                const newFen = gameRef.current.fen();
-                                setFen(newFen);
-                                setStatus('playing');
-                                engine.current?.evaluate(newFen);
-
-                                // Undo for Blind Mode is hard because we lose 'possibleOpenings' history.
-                                // For now, let's just reset game if they undo in Blind Mode? 
-                                // Or just warn them.
-                                // Actually, we can just re-calculate possibleOpenings from history.
-                                // But that's expensive.
-                                // Let's just disable Undo in Blind Mode for now or make it simple (reset).
-                                if (mode === 'blind') {
-                                    alert("Undo not fully supported in Blind Mode yet. Reseting game.");
-                                    resetGame();
-                                    return;
-                                }
-
-                                // ... (Existing Undo Logic)
-                                let node: MoveNode | null = null;
-                                const history = gameRef.current.history({ verbose: true });
-                                let currentLevel = moveTree.current;
-
-                                for (const move of history) {
-                                    const found = currentLevel.find(n => n.san === move.san);
-                                    if (found) {
-                                        node = found;
-                                        currentLevel = found.children;
-                                    } else {
-                                        node = null;
-                                        break;
-                                    }
-                                }
-                                currentNode.current = node;
-                            }}
-                            className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
-                            title="Undo Move"
+                            title="Undo Move (Left Arrow)"
                         >
                             <RotateCcw size={18} />
                         </button>
                         <button
-                            onClick={copyFen}
+                            onClick={resetGame}
                             className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
-                            title="Copy FEN"
+                            title="Reset Board (R)"
+                        >
+                            <RefreshCw size={18} />
+                        </button>
+
+                        <div className="w-px h-6 bg-gray-700 mx-1" /> {/* Separator */}
+
+                        <button
+                            onClick={onToggleHints}
+                            className={`p-2 rounded transition-colors ${showHints ? 'text-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
+                            title={showHints ? "Hints On (H)" : "Hints Off (H)"}
+                        >
+                            <Lightbulb size={18} className={showHints ? "fill-current" : ""} />
+                        </button>
+
+                        <div className="w-px h-6 bg-gray-700 mx-1" /> {/* Separator */}
+
+                        <button
+                            onClick={copyPgn}
+                            className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
+                            title="Copy PGN (C)"
                         >
                             <Copy size={18} />
                         </button>
                         <button
                             onClick={analyzeLichess}
                             className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
-                            title="Analyze on Lichess"
+                            title="Analyze on Lichess (A)"
                         >
                             <ExternalLink size={18} />
+                        </button>
+
+                        <div className="w-px h-6 bg-gray-700 mx-1" /> {/* Separator */}
+
+                        <button
+                            onClick={onOpenSettings}
+                            className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
+                            title="Settings (S)"
+                        >
+                            <Settings size={18} />
+                        </button>
+                        <button
+                            onClick={onToggleFullscreen}
+                            className="p-2 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
+                            title={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"}
+                        >
+                            {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                         </button>
                     </div>
                 </div>

@@ -5,7 +5,8 @@ import { FeedbackOverlay } from './components/FeedbackOverlay';
 import { openingManager } from './lib/openingManager';
 import { parsePgnToTree } from './lib/pgnParser';
 import type { Opening } from './data/openings';
-import { Menu, X, Lightbulb } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import { SettingsModal } from './components/SettingsModal';
 
 function App() {
   const [openings, setOpenings] = useState<Opening[]>([]);
@@ -15,6 +16,8 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showHints, setShowHints] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
 
 
@@ -111,37 +114,42 @@ function App() {
     setShowBlindModeModal(false);
   };
 
+  const handleSelectOpening = (id: string) => {
+    setSelectedId(id);
+    setFeedback(null);
+  };
+
   // ...
 
   return (
-    <div className="flex h-screen bg-[#1a1a1a] text-white font-sans overflow-hidden">
-      <Sidebar
-        openings={openings}
-        selectedId={selectedId}
-        onSelect={(id) => {
-          setSelectedId(id);
-          setFeedback(null);
-        }}
-        onAdd={() => setShowAddModal(true)}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-      />
+    <div className="flex h-screen bg-[#1a1a1a] text-white overflow-hidden">
+      {!isFullscreen && (
+        <Sidebar
+          openings={openings}
+          selectedId={selectedOpening?.id || null}
+          onSelect={handleSelectOpening}
+          onAdd={() => setShowAddModal(true)}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
+      )}
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative w-full">
+      <main className={`flex-1 overflow-y-auto relative ${isFullscreen ? 'p-0 flex items-center justify-center' : 'p-4 md:p-8'}`}>
         {/* Mobile Header */}
-        <div className="md:hidden absolute top-4 left-4 z-30">
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 bg-gray-800 rounded-lg text-white hover:bg-gray-700"
-          >
-            <Menu size={24} />
-          </button>
-        </div>
+        {!isFullscreen && (
+          <div className="md:hidden flex items-center justify-between mb-6">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-gray-800 rounded-lg">
+              <Menu size={24} />
+            </button>
+            <h1 className="text-xl font-bold">Chess Trainer</h1>
+            <div className="w-10" />
+          </div>
+        )}
         {/* Blind Mode Color Selection Modal */}
         {showBlindModeModal && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="bg-[#242424] p-6 rounded-xl w-full max-w-sm border border-gray-700 text-center">
               <h3 className="text-xl font-bold mb-4">Select Your Color</h3>
               <div className="flex gap-4 justify-center">
@@ -168,120 +176,112 @@ function App() {
           </div>
         )}
 
-        {(selectedOpening || gameMode === 'blind') ? (
-          <>
-            <div className="mb-8 text-center w-full max-w-3xl relative">
-              {gameMode === 'blind' ? (
-                <div className="mb-4">
-                  <h2 className="text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-                    Blind Mode
-                  </h2>
-                  <p className="text-gray-400">The computer has chosen a secret opening...</p>
+        <div className={`w-full ${isFullscreen ? 'h-full flex flex-col' : 'max-w-4xl mx-auto'}`}>
+          {(selectedOpening || gameMode === 'blind') ? (
+            <>
+              {!isFullscreen && (
+                <div className="mb-8 text-center space-y-4">
+                  {gameMode === 'blind' ? (
+                    <div className="mb-4">
+                      <h2 className="text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+                        Blind Mode
+                      </h2>
+                      <p className="text-gray-400">The computer has chosen a secret opening...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="text-3xl font-bold mb-2">{selectedOpening?.name}</h2>
+                      <p className="text-gray-400 max-w-xl mx-auto mb-4">{selectedOpening?.description}</p>
+                    </>
+                  )}
+
+                  {/* Controls */}
+                  <div className="flex items-center justify-center gap-4">
+                    {/* Mode Selector */}
+                    <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+                      <button
+                        onClick={() => setGameMode('trainer')}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${gameMode === 'trainer' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        Trainer
+                      </button>
+                      <button
+                        onClick={() => setGameMode('explorer')}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${gameMode === 'explorer' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        Explorer
+                      </button>
+                      <button
+                        onClick={() => {
+                          // If switching TO blind mode, we need to reset/ask for color.
+                          // But here we are already in a game. 
+                          // Maybe just disable switching TO blind mode from here?
+                          // Or treat it as a reset.
+                          setShowBlindModeModal(true);
+                        }}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${gameMode === 'blind' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        Blind
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <>
-                  <h2 className="text-3xl font-bold mb-2">{selectedOpening?.name}</h2>
-                  <p className="text-gray-400 max-w-xl mx-auto mb-4">{selectedOpening?.description}</p>
-                </>
               )}
 
-              {/* Controls */}
-              <div className="absolute top-0 right-0 flex flex-col items-end gap-4">
-                {/* Mode Selector */}
-                <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
-                  <button
-                    onClick={() => setGameMode('trainer')}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${gameMode === 'trainer' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                  >
-                    Trainer
-                  </button>
-                  <button
-                    onClick={() => setGameMode('explorer')}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${gameMode === 'explorer' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                  >
-                    Explorer
-                  </button>
-                  <button
-                    onClick={() => {
-                      // If switching TO blind mode, we need to reset/ask for color.
-                      // But here we are already in a game. 
-                      // Maybe just disable switching TO blind mode from here?
-                      // Or treat it as a reset.
-                      setShowBlindModeModal(true);
-                    }}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${gameMode === 'blind' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                  >
-                    Blind
-                  </button>
-                </div>
-
-                {/* Hints Toggle */}
-                <button
-                  onClick={() => setShowHints(!showHints)}
-                  className={`flex items-center gap-2 px-3 py-1 rounded text-sm font-medium transition-colors border border-gray-700 ${showHints ? 'bg-yellow-600 text-white border-yellow-500' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-                >
-                  <Lightbulb size={16} />
-                  {showHints ? 'Hints On' : 'Hints Off'}
-                </button>
-
-                {/* Difficulty Selector */}
-                <div className="flex flex-col items-end">
-                  <label className="text-xs text-gray-400 mb-1">Engine Strength: {difficulty}</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="20"
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(parseInt(e.target.value))}
-                    className="w-32 accent-blue-500 cursor-pointer"
-                  />
-                </div>
-              </div>
+              <ChessGame
+                key={selectedOpening!.id + difficulty} // Remount on opening/difficulty change. Mode switch should NOT remount to allow "Continue in Explorer".
+                opening={selectedOpening!}
+                difficulty={difficulty}
+                mode={gameMode}
+                showHints={showHints}
+                onComplete={handleGameComplete}
+                onOpenSettings={() => setShowSettings(true)}
+                onToggleHints={() => setShowHints(!showHints)}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+              />
+              <SettingsModal
+                isOpen={showSettings}
+                onClose={() => setShowSettings(false)}
+                difficulty={difficulty}
+                setDifficulty={setDifficulty}
+              />
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-6">
+              <div className="text-gray-500 text-xl">Select an opening to start training</div>
+              <div className="text-gray-600">- OR -</div>
+              <button
+                onClick={() => setShowBlindModeModal(true)}
+                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg"
+              >
+                Enter Blind Mode
+              </button>
             </div>
+          )}
 
-            <ChessGame
-              key={selectedOpening!.id + difficulty} // Remount on opening/difficulty change. Mode switch should NOT remount to allow "Continue in Explorer".
-              opening={selectedOpening!}
-              difficulty={difficulty}
-              mode={gameMode}
-              showHints={showHints}
-              onComplete={handleGameComplete}
-            />
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-6">
-            <div className="text-gray-500 text-xl">Select an opening to start training</div>
-            <div className="text-gray-600">- OR -</div>
-            <button
-              onClick={() => setShowBlindModeModal(true)}
-              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg"
-            >
-              Enter Blind Mode
-            </button>
-          </div>
-        )}
-
-        {/* Feedback Overlay */}
-        {feedback && selectedOpening && (
-          <FeedbackOverlay
-            success={feedback.success}
-            message={feedback.message}
-            opening={selectedOpening}
-            onRetry={() => setFeedback(null)}
-            onNext={() => {
-              const currentIndex = openings.findIndex(o => o.id === selectedId);
-              const next = openings[currentIndex + 1];
-              if (next) {
-                setSelectedId(next.id);
+          {/* Feedback Overlay */}
+          {feedback && selectedOpening && (
+            <FeedbackOverlay
+              success={feedback.success}
+              message={feedback.message}
+              opening={selectedOpening}
+              onRetry={() => setFeedback(null)}
+              onNext={() => {
+                const currentIndex = openings.findIndex(o => o.id === selectedId);
+                const next = openings[currentIndex + 1];
+                if (next) {
+                  setSelectedId(next.id);
+                  setFeedback(null);
+                }
+              }}
+              onContinueInExplorer={(!feedback.success && gameMode === 'blind') ? () => {
+                setGameMode('explorer');
                 setFeedback(null);
-              }
-            }}
-            onContinueInExplorer={(!feedback.success && gameMode === 'blind') ? () => {
-              setGameMode('explorer');
-              setFeedback(null);
-            } : undefined}
-          />
-        )}
+              } : undefined}
+            />
+          )}
+        </div>
 
         {/* Add Opening Modal */}
         {showAddModal && (
