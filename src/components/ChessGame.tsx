@@ -6,6 +6,7 @@ import type { Opening } from '../data/openings';
 import { StockfishEngine } from '../lib/stockfish';
 import type { Evaluation } from '../lib/stockfish';
 import { EvaluationBar } from './EvaluationBar';
+import { PromotionDialog } from './PromotionDialog';
 import { parsePgnToTree } from '../lib/pgnParser';
 import type { MoveNode } from '../lib/pgnParser';
 
@@ -33,6 +34,8 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
 
     // Blind Mode State
     const [blindModeMessage, setBlindModeMessage] = useState<string | null>(null);
+    const [pendingPromotion, setPendingPromotion] = useState<{ sourceSquare: Square; targetSquare: Square } | null>(null);
+
 
     interface BlindModeOpening {
         opening: Opening;
@@ -101,6 +104,8 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
             });
         }
     }, [mode, opening.playerColor]); // Re-run if color changes (new game)
+
+
 
     useEffect(() => {
         // If computer is white and it's start of game, play first move
@@ -194,6 +199,24 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
 
     const makeMove = (moveSan: string, node: MoveNode | null) => {
         try {
+            // If we have a promotion piece, we need to construct the move object manually if moveSan doesn't include it
+            // But wait, moveSan usually includes it (e.g. "e8=Q").
+            // However, if we are coming from the engine or tree, moveSan is full.
+            // If we are coming from user selection, we might need to be careful.
+
+            // Actually, for user moves, we usually use the object format in game.move()
+            // But here we are passing SAN.
+            // Let's change the signature or how we call it.
+
+            // If we look at existing calls: makeMove(nextNode!.san, nextNode)
+
+            // For user moves, we call gameRef.current.move({...}) directly in onDrop.
+            // We should refactor onDrop to use makeMove? Or keep them separate?
+            // The existing code has makeMove separate from onDrop's direct game.move call.
+            // Let's unify or just handle the promotion in onDrop and then call the logic.
+
+            // Actually, I will modify onDrop to NOT call game.move immediately if promotion.
+
             const result = gameRef.current.move(moveSan);
             if (result) {
                 const newFen = gameRef.current.fen();
@@ -201,9 +224,6 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                 engine.current?.evaluate(newFen);
 
                 if (mode === 'blind') {
-                    // Update all possible openings
-                    // For the one we just played (computer move), we know it's valid for targetOpening
-                    // But we should update ALL possible openings just in case
                     updateBlindModeState(result.san);
                 } else {
                     currentNode.current = node;
@@ -259,17 +279,21 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
         }
     };
 
-    const onDrop = (sourceSquare: string, targetSquare: string) => {
-        if (status !== 'playing' && status !== 'out-of-book') return false;
-        if (mode === 'trainer' && gameRef.current.turn() !== opening.playerColor) return false;
-        if (mode === 'blind' && gameRef.current.turn() !== opening.playerColor) return false;
-        if (gameRef.current.turn() !== opening.playerColor && mode === 'trainer') return false;
+    const handlePromotionSelect = (piece: 'q' | 'r' | 'b' | 'n') => {
+        if (!pendingPromotion) return;
 
+        const { sourceSquare, targetSquare } = pendingPromotion;
+        setPendingPromotion(null);
+
+        attemptMove(sourceSquare, targetSquare, piece);
+    };
+
+    const attemptMove = (sourceSquare: string, targetSquare: string, promotion?: string) => {
         try {
             const move = gameRef.current.move({
                 from: sourceSquare,
                 to: targetSquare,
-                promotion: 'q',
+                promotion: promotion,
             });
 
             if (!move) return false;
@@ -311,6 +335,35 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
 
             return true;
         } catch (e) {
+            return false;
+        }
+    };
+
+
+
+    const onDrop = (sourceSquare: string, targetSquare: string) => {
+        if (status !== 'playing' && status !== 'out-of-book') return false;
+        if (mode === 'trainer' && gameRef.current.turn() !== opening.playerColor) return false;
+        if (mode === 'blind' && gameRef.current.turn() !== opening.playerColor) return false;
+        if (gameRef.current.turn() !== opening.playerColor && mode === 'trainer') return false;
+
+        try {
+            // Check for promotion
+            const piece = gameRef.current.get(sourceSquare as Square);
+            const turn = gameRef.current.turn();
+
+            const isPromotion = (piece?.type === 'p' &&
+                ((turn === 'w' && targetSquare[1] === '8') ||
+                    (turn === 'b' && targetSquare[1] === '1')));
+
+            if (isPromotion) {
+                setPendingPromotion({ sourceSquare: sourceSquare as Square, targetSquare: targetSquare as Square });
+                return false;
+            }
+
+            return attemptMove(sourceSquare, targetSquare);
+        } catch (e) {
+            console.error('onDrop error', e);
             return false;
         }
     };
@@ -393,39 +446,29 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                         try {
                             const tempGame = new Chess(gameRef.current.fen());
                             const move = tempGame.move(child.san);
-                            if (move) return { startSquare: move.from, endSquare: move.to, color: 'rgba(255, 170, 0, 0.8)' };
-                        } catch (e) { return null; }
-                        return null;
-                    }).filter(Boolean);
-                }
-            } else {
-                const validChildren = currentNode.current ? currentNode.current.children : moveTree.current;
-                arrows = validChildren.map((child) => {
-                    try {
-                        const tempGame = new Chess(gameRef.current.fen());
-                        const move = tempGame.move(child.san);
-                        if (move) {
-                            return { startSquare: move.from, endSquare: move.to, color: 'rgba(255, 170, 0, 0.8)' };
+                            if (move) {
+                                return {
+                                    startSquare: move.from as Square,
+                                    endSquare: move.to as Square,
+                                    color: 'rgba(255, 215, 0, 0.6)'
+                                };
+                            }
+                        } catch (e) {
+                            return null;
                         }
-                    } catch (e) {
                         return null;
-                    }
-                    return null;
-                }).filter((x): x is { startSquare: Square; endSquare: Square; color: string } => x !== null);
+                    }).filter((a: any): a is { startSquare: Square; endSquare: Square; color: string } => !!a);
+                    setCustomArrows(arrows);
+                }
             }
-            setCustomArrows(arrows);
         } else {
             setCustomArrows([]);
         }
-    }, [showHints, status, opening.playerColor, currentNode.current, fen, mode]);
+    }, [showHints, status, opening, mode, fen]);
 
     return (
         <div className="flex gap-4 items-stretch justify-center w-full max-w-[700px] mx-auto relative">
-            {blindModeMessage && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-xl animate-fade-in-out">
-                    {blindModeMessage}
-                </div>
-            )}
+
             <EvaluationBar evaluation={evaluation} orientation={orientation} />
 
             <div className="flex-1 flex flex-col items-center">
@@ -443,6 +486,18 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                             lightSquareStyle: { backgroundColor: '#ebecd0' },
                         }}
                     />
+                    <PromotionDialog
+                        isOpen={!!pendingPromotion}
+                        onSelect={handlePromotionSelect}
+                        orientation={orientation}
+                    />
+                    {blindModeMessage && (
+                        <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+                            <div className="bg-black/75 text-white px-6 py-3 rounded-xl text-xl font-bold animate-in fade-in zoom-in duration-300">
+                                {blindModeMessage}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-4 w-full flex justify-between items-center text-white bg-gray-800 p-3 rounded-lg">
@@ -521,6 +576,6 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
