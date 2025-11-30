@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Chess, type Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { RotateCcw, RefreshCw, Settings, Copy, ExternalLink, Lightbulb, Maximize2, Minimize2 } from 'lucide-react';
