@@ -7,6 +7,8 @@ export class StockfishEngine {
     private worker: Worker | null = null;
     private onEvaluation: ((eval_: Evaluation) => void) | null = null;
     private onBestMove: ((move: string) => void) | null = null;
+    private isSearching = false;
+    private ignoreNextBestMove = false;
 
     constructor() {
         this.init();
@@ -15,6 +17,11 @@ export class StockfishEngine {
     private init() {
         try {
             this.worker = new Worker('/stockfish/stockfish.js');
+            console.log('Stockfish worker initialized');
+
+            this.worker.onerror = (err) => {
+                console.error('Stockfish worker error:', err);
+            };
 
             this.worker.onmessage = (e) => {
                 const line = e.data;
@@ -25,7 +32,13 @@ export class StockfishEngine {
                 }
 
                 if (line.startsWith('bestmove')) {
-                    console.log('SF bestmove line:', line);
+                    this.isSearching = false;
+
+                    if (this.ignoreNextBestMove) {
+                        this.ignoreNextBestMove = false;
+                        return;
+                    }
+
                     const move = line.split(' ')[1];
                     if (this.onBestMove) {
                         this.onBestMove(move);
@@ -64,14 +77,20 @@ export class StockfishEngine {
         this.stop();
         this.worker.postMessage(`position fen ${fen}`);
         this.worker.postMessage(`go depth ${depth}`);
+        this.isSearching = true;
     }
 
     public getBestMove(fen: string, depth: number = 10, onMove: (move: string) => void) {
-        if (!this.worker) return;
+        if (!this.worker) {
+            console.error('Stockfish worker not initialized');
+            return;
+        }
+
         this.stop();
         this.onBestMove = onMove;
         this.worker.postMessage(`position fen ${fen}`);
         this.worker.postMessage(`go depth ${depth}`);
+        this.isSearching = true;
     }
 
     public setSkillLevel(level: number) {
@@ -85,7 +104,8 @@ export class StockfishEngine {
     }
 
     public stop() {
-        if (this.worker) {
+        if (this.worker && this.isSearching) {
+            this.ignoreNextBestMove = true;
             this.worker.postMessage('stop');
         }
     }

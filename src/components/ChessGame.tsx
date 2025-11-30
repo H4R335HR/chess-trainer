@@ -160,10 +160,13 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
         } else {
             // No moves in tree
             if (mode === 'explorer') {
-                // ... (Existing Explorer Logic)
                 if (status !== 'out-of-book') setStatus('out-of-book');
                 isThinking.current = true;
-                engine.current?.getBestMove(gameRef.current.fen(), 15, (bestMove) => {
+                if (!engine.current) {
+                    isThinking.current = false;
+                    return;
+                }
+                engine.current.getBestMove(gameRef.current.fen(), 15, (bestMove) => {
                     const from = bestMove.substring(0, 2);
                     const to = bestMove.substring(2, 4);
                     const promotion = bestMove.length > 4 ? bestMove.substring(4, 5) : undefined;
@@ -318,6 +321,9 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                         if (mode === 'trainer') {
                             setStatus('won');
                             onComplete(true, `You successfully navigated the ${opening.name}!`);
+                        } else {
+                            // Explorer mode: Reached end of book, continue with engine
+                            playComputerMove();
                         }
                     } else {
                         playComputerMove();
