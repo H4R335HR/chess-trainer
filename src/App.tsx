@@ -13,7 +13,10 @@ function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean, message: string } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showHints, setShowHints] = useState(false);
+
+
 
   useEffect(() => {
     setOpenings(openingManager.getAllOpenings());
@@ -62,6 +65,15 @@ function App() {
   const [difficulty, setDifficulty] = useState(10);
   const [gameMode, setGameMode] = useState<'trainer' | 'explorer' | 'blind'>('trainer');
   const [showBlindModeModal, setShowBlindModeModal] = useState(false);
+
+  // Auto-collapse sidebar in Blind Mode
+  useEffect(() => {
+    if (gameMode === 'blind') {
+      setIsSidebarCollapsed(true);
+    } else {
+      setIsSidebarCollapsed(false);
+    }
+  }, [gameMode]);
 
   const startBlindMode = (color: 'w' | 'b') => {
     // Create a dummy opening for Blind Mode initialization
@@ -113,6 +125,8 @@ function App() {
         onAdd={() => setShowAddModal(true)}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative w-full">
@@ -226,7 +240,7 @@ function App() {
             </div>
 
             <ChessGame
-              key={selectedOpening!.id + difficulty + gameMode + (gameMode === 'blind' ? 'blind' : '')} // Remount on change
+              key={selectedOpening!.id + difficulty} // Remount on opening/difficulty change. Mode switch should NOT remount to allow "Continue in Explorer".
               opening={selectedOpening!}
               difficulty={difficulty}
               mode={gameMode}
@@ -262,6 +276,10 @@ function App() {
                 setFeedback(null);
               }
             }}
+            onContinueInExplorer={(!feedback.success && gameMode === 'blind') ? () => {
+              setGameMode('explorer');
+              setFeedback(null);
+            } : undefined}
           />
         )}
 

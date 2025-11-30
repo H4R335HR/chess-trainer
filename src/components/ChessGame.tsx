@@ -73,7 +73,7 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
         return () => {
             engine.current?.quit();
         };
-    }, [opening, difficulty, mode]);
+    }, [opening, difficulty]); // Removed 'mode' to prevent reset when switching modes (e.g. Blind -> Explorer)
 
     // We need a separate effect for Blind Mode initialization because we need to read all openings
     useEffect(() => {
@@ -114,6 +114,19 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
             playComputerMove();
         }
     }, [opening, mode]);
+
+    // Handle transition to Explorer mode from Lost/Won state (e.g. "Continue in Explorer")
+    useEffect(() => {
+        if (mode === 'explorer' && (status === 'lost' || status === 'won')) {
+            console.log('Switching to Explorer mode from', status);
+            setStatus('out-of-book');
+            setBlindModeMessage(null); // Clear any blind mode messages
+            // If it's computer's turn, play move
+            if (gameRef.current.turn() !== opening.playerColor) {
+                playComputerMove(true);
+            }
+        }
+    }, [mode, status]);
 
     const isThinking = useRef(false);
 
@@ -466,6 +479,26 @@ export const ChessGame: React.FC<ChessGameProps> = ({ opening, difficulty, mode,
                     }).filter((a: any): a is { startSquare: Square; endSquare: Square; color: string } => !!a);
                     setCustomArrows(arrows);
                 }
+            } else {
+                // Trainer Mode Hints
+                const validChildren = currentNode.current ? currentNode.current.children : moveTree.current;
+                arrows = validChildren.map((child: MoveNode) => {
+                    try {
+                        const tempGame = new Chess(gameRef.current.fen());
+                        const move = tempGame.move(child.san);
+                        if (move) {
+                            return {
+                                startSquare: move.from as Square,
+                                endSquare: move.to as Square,
+                                color: 'rgba(255, 215, 0, 0.6)'
+                            };
+                        }
+                    } catch (e) {
+                        return null;
+                    }
+                    return null;
+                }).filter((a: any): a is { startSquare: Square; endSquare: Square; color: string } => !!a);
+                setCustomArrows(arrows);
             }
         } else {
             setCustomArrows([]);

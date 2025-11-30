@@ -7,9 +7,10 @@ interface FeedbackOverlayProps {
     opening: Opening;
     onRetry: () => void;
     onNext?: () => void;
+    onContinueInExplorer?: () => void;
 }
 
-export const FeedbackOverlay: React.FC<FeedbackOverlayProps> = ({ success, message, opening, onRetry, onNext }) => {
+export const FeedbackOverlay: React.FC<FeedbackOverlayProps> = ({ success, message, opening, onRetry, onNext, onContinueInExplorer }) => {
     const getTitle = () => {
         if (success) {
             return `Mastered: ${opening.name}`;
@@ -42,6 +43,14 @@ export const FeedbackOverlay: React.FC<FeedbackOverlayProps> = ({ success, messa
                             className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
                         >
                             Next Opening
+                        </button>
+                    )}
+                    {!success && onContinueInExplorer && (
+                        <button
+                            onClick={onContinueInExplorer}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                        >
+                            Continue in Explorer
                         </button>
                     )}
                 </div>
