@@ -16,7 +16,7 @@ export class StockfishEngine {
 
     private init() {
         try {
-            this.worker = new Worker('/stockfish/stockfish.js');
+            this.worker = new Worker(`${import.meta.env.BASE_URL}stockfish/stockfish.js`);
             console.log('Stockfish worker initialized');
 
             this.worker.onerror = (err) => {
