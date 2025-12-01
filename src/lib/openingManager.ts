@@ -1,5 +1,5 @@
-import { initialOpenings } from '../data/openings';
-import type { Opening } from '../data/openings';
+import { initialOpenings, initialOpeningCategories } from '../data/openings';
+import type { Opening, OpeningCategory } from '../data/openings';
 import { v4 as uuidv4 } from 'uuid';
 
 const STORAGE_KEY = 'chess-trainer-custom-openings';
@@ -30,6 +30,34 @@ export class OpeningManager {
 
     public getOpeningById(id: string): Opening | undefined {
         return this.openings.find(o => o.id === id);
+    }
+
+    public getCategorizedOpenings(): OpeningCategory[] {
+        // Deep copy the initial categories to avoid mutating the source
+        const categories: OpeningCategory[] = JSON.parse(JSON.stringify(initialOpeningCategories));
+
+        // Find custom openings (those not in initialOpenings)
+        // Note: We check by ID. initialOpenings contains all built-in variations.
+        const customOpenings = this.openings.filter(o => !initialOpenings.find(io => io.id === o.id));
+
+        if (customOpenings.length > 0) {
+            // For now, add all custom openings to a specific "Custom" category
+            // In the future, we could try to auto-categorize them based on PGN
+            const customCategory: OpeningCategory = {
+                id: 'custom-openings',
+                name: 'Custom Openings',
+                groups: [
+                    {
+                        id: 'user-added',
+                        name: 'User Added',
+                        variations: customOpenings
+                    }
+                ]
+            };
+            categories.push(customCategory);
+        }
+
+        return categories;
     }
 
     public addCustomOpening(opening: Omit<Opening, 'id'>): Opening {

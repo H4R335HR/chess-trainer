@@ -4,12 +4,13 @@ import { ChessGame } from './components/ChessGame';
 import { FeedbackOverlay } from './components/FeedbackOverlay';
 import { openingManager } from './lib/openingManager';
 import { parsePgnToTree } from './lib/pgnParser';
-import type { Opening } from './data/openings';
+import type { Opening, OpeningCategory } from './data/openings';
 import { Menu, X } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 
 function App() {
   const [openings, setOpenings] = useState<Opening[]>([]);
+  const [categories, setCategories] = useState<OpeningCategory[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean, message: string } | null>(null);
@@ -23,6 +24,7 @@ function App() {
 
   useEffect(() => {
     setOpenings(openingManager.getAllOpenings());
+    setCategories(openingManager.getCategorizedOpenings());
     const all = openingManager.getAllOpenings();
     if (all.length > 0) setSelectedId(all[0].id);
   }, []);
@@ -58,6 +60,7 @@ function App() {
         description: description || 'Custom opening'
       });
       setOpenings(openingManager.getAllOpenings());
+      setCategories(openingManager.getCategorizedOpenings());
       setSelectedId(newOp.id);
       setShowAddModal(false);
     }
@@ -125,7 +128,7 @@ function App() {
     <div className="flex h-screen bg-[#1a1a1a] text-white overflow-hidden">
       {!isFullscreen && (
         <Sidebar
-          openings={openings}
+          categories={categories}
           selectedId={selectedOpening?.id || null}
           onSelect={handleSelectOpening}
           onAdd={() => setShowAddModal(true)}
