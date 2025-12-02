@@ -1,73 +1,80 @@
-# React + TypeScript + Vite
+# Chess Opening Trainer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive chess opening trainer application built with React, TypeScript, and Vite. This tool is designed to help players recognize, defend against, and practice common chess openings, gambits, and traps.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Opening Trainer**: Practice against specific openings and traps. Get immediate feedback on your moves.
+- **Blind Mode**: Play against the computer where the computer secretly selects an opening. You must adapt and identify the opening as you play.
+- **Repertoire Tree**: Explore opening variations in a tree structure. Visualize different lines and transpositions.
+- **Interactive Board**: Fully interactive chessboard using `react-chessboard` and `chess.js`.
+- **Stockfish Integration**: Integrated Stockfish engine for move validation and evaluation.
+- **PGN Support**: Parse and display games from PGN files using `pgn-parser`.
+- **Promotion Choice**: Custom dialog for pawn promotion selection.
+- **Responsive Design**: Modern and responsive UI built with Tailwind CSS.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend Framework**: React 19
+- **Language**: TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **Chess Logic**: chess.js
+- **Board Component**: react-chessboard
+- **PGN Parsing**: pgn-parser
+- **Engine**: stockfish.js
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js (v18 or higher recommended)
+- npm
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Installation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd chess-trainer
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+### Running Locally
+
+Start the development server:
+
+```bash
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The application will be available at `http://localhost:5173`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Building for Production
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Build the application for production:
+
+```bash
+npm run build
 ```
+
+The build artifacts will be stored in the `dist/` directory.
+
+## Deployment
+
+This project is configured for deployment to GitHub Pages.
+
+To deploy:
+
+```bash
+npm run deploy
+```
+
+## License
+
+MIT
