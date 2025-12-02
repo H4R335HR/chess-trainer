@@ -1,8 +1,22 @@
-import { initialOpenings, initialOpeningCategories } from '../data/openings';
-import type { Opening, OpeningCategory } from '../data/openings';
+import { initialOpenings } from '../data/openings';
+import type { Opening } from '../data/openings';
 import { v4 as uuidv4 } from 'uuid';
 
 const STORAGE_KEY = 'chess-trainer-custom-openings';
+
+// Define the interface locally since it was removed from openings.ts
+export interface OpeningCategory {
+    id: string;
+    name: string;
+    groups: OpeningGroup[];
+}
+
+export interface OpeningGroup {
+    id: string;
+    name: string;
+    description?: string;
+    variations: Opening[];
+}
 
 export class OpeningManager {
     private openings: Opening[];
@@ -33,29 +47,70 @@ export class OpeningManager {
     }
 
     public getCategorizedOpenings(): OpeningCategory[] {
-        // Deep copy the initial categories to avoid mutating the source
-        const categories: OpeningCategory[] = JSON.parse(JSON.stringify(initialOpeningCategories));
+        const categories: OpeningCategory[] = [];
 
-        // Find custom openings (those not in initialOpenings)
-        // Note: We check by ID. initialOpenings contains all built-in variations.
-        const customOpenings = this.openings.filter(o => !initialOpenings.find(io => io.id === o.id));
+        // Helper to find or create a category
+        const getCategory = (id: string, name: string) => {
+            let cat = categories.find(c => c.id === id);
+            if (!cat) {
+                cat = { id, name, groups: [] };
+                categories.push(cat);
+            }
+            return cat;
+        };
 
-        if (customOpenings.length > 0) {
-            // For now, add all custom openings to a specific "Custom" category
-            // In the future, we could try to auto-categorize them based on PGN
-            const customCategory: OpeningCategory = {
-                id: 'custom-openings',
-                name: 'Custom Openings',
-                groups: [
-                    {
-                        id: 'user-added',
-                        name: 'User Added',
-                        variations: customOpenings
-                    }
-                ]
-            };
-            categories.push(customCategory);
-        }
+        // Helper to find or create a group within a category
+        const getGroup = (category: OpeningCategory, id: string, name: string) => {
+            let group = category.groups.find(g => g.id === id);
+            if (!group) {
+                group = { id, name, variations: [] };
+                category.groups.push(group);
+            }
+            return group;
+        };
+
+        this.openings.forEach(opening => {
+            let categoryId = 'other';
+            let categoryName = 'Other Openings';
+
+            // Determine Category based on First Move
+            if (opening.pgn.startsWith('1. e4')) {
+                categoryId = 'kings-pawn';
+                categoryName = 'King\'s Pawn (e4)';
+            } else if (opening.pgn.startsWith('1. d4')) {
+                categoryId = 'queens-pawn';
+                categoryName = 'Queen\'s Pawn (d4)';
+            } else if (opening.pgn.startsWith('1. c4')) {
+                categoryId = 'english';
+                categoryName = 'English Opening (c4)';
+            } else if (opening.pgn.startsWith('1. Nf3')) {
+                categoryId = 'reti';
+                categoryName = 'Reti / Flank (Nf3)';
+            }
+
+            const category = getCategory(categoryId, categoryName);
+
+            // Determine Group based on Opening Name (simple heuristic)
+            // e.g. "Sicilian Defense: Najdorf" -> "Sicilian Defense"
+            let groupName = opening.name.split(':')[0].trim();
+            // Handle "Defense" suffix grouping if needed, but name prefix is usually good enough
+
+            // Special case for Gambits/Traps if we want to group them differently?
+            // For now, let's stick to the name-based grouping as it keeps related lines together.
+
+            const groupId = groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const group = getGroup(category, groupId, groupName);
+
+            group.variations.push(opening);
+        });
+
+        // Sort categories to put e4/d4 first
+        const order = ['kings-pawn', 'queens-pawn', 'english', 'reti', 'other'];
+        categories.sort((a, b) => {
+            const indexA = order.indexOf(a.id);
+            const indexB = order.indexOf(b.id);
+            return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+        });
 
         return categories;
     }

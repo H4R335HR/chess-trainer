@@ -4,7 +4,8 @@ import { ChessGame } from './components/ChessGame';
 import { FeedbackOverlay } from './components/FeedbackOverlay';
 import { openingManager } from './lib/openingManager';
 import { parsePgnToTree } from './lib/pgnParser';
-import type { Opening, OpeningCategory } from './data/openings';
+import type { OpeningCategory } from './lib/openingManager';
+import type { Opening } from './data/openings';
 import { Menu, X } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 

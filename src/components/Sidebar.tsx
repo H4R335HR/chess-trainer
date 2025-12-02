@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { OpeningCategory } from '../data/openings';
+import type { OpeningCategory } from '../lib/openingManager';
 import { BookOpen, Plus, X, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface SidebarProps {
